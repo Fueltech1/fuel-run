@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fuel Run</title>
+<meta name="description" content="Dodge traffic, mines and gunner cars. Grab fuel, guns, shields and coins in this fast arcade driving game.">
+<meta name="theme-color" content="#151833">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root{
+    --sky-top:#151833;
+    --sky-bottom:#2c2049;
+    --asphalt:#2b2f3c;
+    --asphalt-edge:#20232d;
+    --shoulder:#33422f;
+    --lane-mark:#eee7d6;
+    --rumble:#d9a441;
+    --player:#3fc7c1;
+    --player-dark:#25938e;
+    --enemy:#e8604c;
+    --enemy-dark:#b6412f;
+    --truck:#d99a3a;
+    --truck-dark:#a06f22;
+    --gunner:#8b5fbf;
+    --gunner-dark:#5c3d85;
+    --fuel:#ffc93c;
+    --fuel-dark:#c9922a;
+    --coin:#ffd75e;
+    --coin-dark:#b8912c;
+    --mine:#484c58;
+    --mine-rim:#6b7080;
+    --mine-glow:#ff4d4d;
+    --minefriendly-glow:#5fe8df;
+    --gunpickup:#e05fb0;
+    --gunpickup-dark:#a03d80;
+    --shieldpickup:#5fc3ff;
+    --shieldpickup-dark:#3a8fc9;
+    --ebullet:#ff3b6b;
+    --pbullet:#8ff0ea;
+    --cream:#f4f1ea;
+    --dim:#a9a6c4;
+    --danger:#e8604c;
+    --ok:#5fd98a;
+    --panel-bg:#1b1e3d;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--sky-top);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+  }
+  .app{
+    height:100vh; height:100dvh;
+    display:flex; flex-direction:column;
+    background:linear-gradient(180deg,var(--sky-top),var(--sky-bottom));
+  }
+  .hud{
+    flex:0 0 auto;
+    display:flex; align-items:center; gap:12px;
+    padding:10px 12px;
+    color:var(--cream);
+    z-index:5;
+  }
+  .fuel-wrap{ flex:1 1 auto; display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .fuel-label{ font-size:10px; letter-spacing:0.14em; color:var(--dim); text-transform:uppercase; }
+  .fuel-bar{
+    height:9px; border-radius:5px; background:rgba(255,255,255,0.08);
+    overflow:hidden; border:1px solid rgba(255,255,255,0.12);
+  }
+  .fuel-fill{
+    height:100%; width:100%; border-radius:5px;
+    background:linear-gradient(90deg,var(--fuel-dark),var(--fuel));
+    transition:width 0.15s linear, background 0.3s;
+  }
+  .stat{ text-align:right; }
+  .stat-num{
+    font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+    font-size:18px; font-weight:600; line-height:1;
+  }
+  .stat-label{ font-size:9px; letter-spacing:0.14em; color:var(--dim); text-transform:uppercase; }
+  .stat-num.coins{ color:var(--coin); }
+  .lives-wrap{ display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .lives-dots{ display:flex; gap:4px; }
+  .life-dot{
+    width:10px; height:16px; border-radius:3px; background:var(--player);
+    transition:background 0.2s, transform 0.2s;
+  }
+  .life-dot.lost{ background:rgba(255,255,255,0.14); transform:scale(0.85); }
+  .toast{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    background:rgba(21,24,51,0.88); color:var(--fuel);
+    font-size:13px; font-weight:700; letter-spacing:0.03em;
+    padding:8px 16px; border-radius:20px;
+    border:1px solid rgba(255,201,60,0.4);
+    opacity:0; pointer-events:none;
+    transition:opacity 0.25s, transform 0.25s;
+    z-index:8; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(4px); }
+  .stage{ position:relative; flex:1 1 auto; min-height:0; }
+  canvas{ display:block; width:100%; height:100%; }
+  .sound-btn{
+    position:absolute; bottom:10px; right:10px; z-index:6;
+    width:34px; height:34px; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.16);
+    background:rgba(21,24,51,0.6); color:var(--cream);
+    font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .overlay{
+    position:absolute; inset:0;
+    display:flex; align-items:flex-start; justify-content:center;
+    background:rgba(21,24,51,0.86);
+    backdrop-filter:blur(3px);
+    z-index:10; overflow-y:auto; padding:18px 0;
+  }
+  .overlay.hidden{ display:none; }
+  .panel{
+    text-align:center; color:var(--cream); padding:16px 22px 30px;
+    max-width:340px; width:100%; margin:auto;
+  }
+  .panel h1{ margin:0 0 6px; font-size:30px; font-weight:700; letter-spacing:-0.01em; }
+  .panel h1 span{ color:var(--fuel); }
+  .panel h2{ margin:0 0 14px; font-size:20px; font-weight:700; }
+  .panel p.sub{ margin:0 0 18px; color:var(--dim); font-size:13px; line-height:1.5; }
+  .panel .reason{ font-size:15px; color:var(--enemy); font-weight:600; margin-bottom:4px; }
+  .wallet{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(255,215,94,0.1); border:1px solid rgba(255,215,94,0.3);
+    color:var(--coin); font-weight:700; font-size:14px;
+    padding:6px 14px; border-radius:20px; margin-bottom:14px;
+    font-family:'SF Mono',SFMono-Regular,Consolas,monospace;
+  }
+  .streak-pill{
+    display:inline-block; font-size:11px; color:var(--dim);
+    margin-bottom:12px;
+  }
+  .streak-pill b{ color:var(--ok); }
+  .score-row{ display:flex; justify-content:center; gap:28px; margin:14px 0 16px; }
+  .score-box .n{
+    font-family:'SF Mono',SFMono-Regular,Consolas,monospace;
+    font-size:24px; font-weight:700;
+  }
+  .score-box .l{ font-size:9px; letter-spacing:0.12em; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+  .earn-list{
+    background:rgba(255,255,255,0.04); border-radius:12px;
+    padding:10px 14px; margin:0 0 16px; font-size:12.5px;
+  }
+  .earn-row{ display:flex; justify-content:space-between; padding:3px 0; color:var(--dim); }
+  .earn-row b{ color:var(--coin); font-family:'SF Mono',SFMono-Regular,Consolas,monospace; }
+  .earn-row.total{ border-top:1px solid rgba(255,255,255,0.1); margin-top:5px; padding-top:6px; color:var(--cream); font-weight:600; }
+  button.go{
+    appearance:none; border:none; cursor:pointer;
+    background:linear-gradient(180deg,var(--player),var(--player-dark));
+    color:#0e1f1e; font-weight:700; font-size:16px;
+    padding:13px 32px; border-radius:30px; width:100%;
+    box-shadow:0 6px 18px rgba(63,199,193,0.3);
+  }
+  button.go:active{ transform:translateY(1px); }
+  button.alt{
+    appearance:none; cursor:pointer;
+    background:rgba(255,255,255,0.07); color:var(--cream);
+    border:1px solid rgba(255,255,255,0.16);
+    font-weight:600; font-size:14px;
+    padding:11px 18px; border-radius:26px;
+  }
+  button.alt:active{ transform:translateY(1px); }
+  button.alt:disabled{ opacity:0.4; cursor:default; }
+  button.revive{
+    appearance:none; cursor:pointer; width:100%;
+    background:linear-gradient(180deg,#ffd75e,#c9922a);
+    color:#2a1f04; font-weight:700; font-size:15px;
+    padding:12px 18px; border-radius:28px; border:none; margin-bottom:10px;
+  }
+  button.revive:disabled{ opacity:0.45; }
+  .btn-row{ display:flex; gap:8px; margin-top:10px; }
+  .btn-row button{ flex:1; }
+  .legend{
+    display:flex; flex-wrap:wrap; justify-content:center;
+    gap:7px 12px; margin-top:16px; font-size:10px; color:var(--dim);
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:4px; }
+  .swatch{ width:8px; height:8px; border-radius:2px; display:inline-block; flex:0 0 auto; }
+  .section{
+    margin-top:18px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.1);
+  }
+  .section-title{
+    font-size:10px; letter-spacing:0.14em; color:var(--dim);
+    text-transform:uppercase; margin-bottom:9px;
+  }
+  .scores-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+  .scores-list li{ display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; }
+  .scores-list li.empty{ color:var(--dim); font-size:12px; }
+  .scores-list .rank{ font-size:10px; color:var(--dim); width:14px; text-align:right; }
+  .scores-list .val{ font-family:'SF Mono',SFMono-Regular,Consolas,monospace; font-weight:600; color:var(--cream); }
+  .scores-list li.new .val{ color:var(--fuel); }
+
+  /* garage */
+  .car-list{ display:flex; flex-direction:column; gap:8px; }
+  .car-card{
+    display:flex; align-items:center; gap:11px; text-align:left;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+    border-radius:12px; padding:10px 12px; cursor:pointer;
+  }
+  .car-card.selected{ border-color:var(--player); background:rgba(63,199,193,0.12); }
+  .car-card.locked{ opacity:0.75; }
+  .car-chip{ width:22px; height:34px; border-radius:5px; flex:0 0 auto; }
+  .car-info{ flex:1 1 auto; min-width:0; }
+  .car-name{ font-size:14px; font-weight:700; }
+  .car-desc{ font-size:11px; color:var(--dim); line-height:1.35; margin-top:2px; }
+  .car-action{ flex:0 0 auto; font-size:12px; font-weight:700; }
+  .car-action.price{ color:var(--coin); font-family:'SF Mono',SFMono-Regular,Consolas,monospace; }
+  .car-action.owned{ color:var(--ok); }
+  .car-action.cant{ color:var(--dim); }
+  .upg-row{
+    display:flex; align-items:center; gap:10px; text-align:left;
+    padding:9px 0; border-bottom:1px solid rgba(255,255,255,0.07);
+  }
+  .upg-info{ flex:1 1 auto; min-width:0; }
+  .upg-name{ font-size:13px; font-weight:600; }
+  .upg-desc{ font-size:10.5px; color:var(--dim); margin-top:2px; }
+  .pips{ display:flex; gap:3px; margin-top:5px; }
+  .pip{ width:16px; height:4px; border-radius:2px; background:rgba(255,255,255,0.14); }
+  .pip.on{ background:var(--player); }
+  .upg-buy{
+    appearance:none; cursor:pointer; flex:0 0 auto;
+    background:rgba(255,215,94,0.12); border:1px solid rgba(255,215,94,0.35);
+    color:var(--coin); font-weight:700; font-size:11.5px;
+    padding:7px 11px; border-radius:16px;
+    font-family:'SF Mono',SFMono-Regular,Consolas,monospace;
+  }
+  .upg-buy:disabled{ opacity:0.4; cursor:default; }
+  .upg-buy.maxed{ background:none; border-color:rgba(95,217,138,0.4); color:var(--ok); }
+
+  /* missions */
+  .mission{
+    text-align:left; background:rgba(255,255,255,0.05);
+    border-radius:12px; padding:11px 13px; margin-bottom:8px;
+    border:1px solid rgba(255,255,255,0.09);
+  }
+  .mission.done{ border-color:rgba(95,217,138,0.45); background:rgba(95,217,138,0.1); }
+  .mission-top{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .mission-desc{ font-size:12.5px; font-weight:600; }
+  .mission-reward{
+    font-size:11px; color:var(--coin); font-weight:700; flex:0 0 auto;
+    font-family:'SF Mono',SFMono-Regular,Consolas,monospace;
+  }
+  .mission.done .mission-reward{ color:var(--ok); }
+  .mission-bar{
+    height:5px; border-radius:3px; background:rgba(255,255,255,0.1);
+    margin-top:7px; overflow:hidden;
+  }
+  .mission-bar i{ display:block; height:100%; background:var(--player); border-radius:3px; }
+  .mission.done .mission-bar i{ background:var(--ok); }
+  .mission-prog{ font-size:10px; color:var(--dim); margin-top:4px; }
+  .reset-link{
+    display:inline-block; margin-top:16px; font-size:11px;
+    color:var(--dim); text-decoration:underline; cursor:pointer; background:none; border:none;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hud">
+    <div class="fuel-wrap">
+      <div class="fuel-label">Fuel</div>
+      <div class="fuel-bar"><div class="fuel-fill" id="fuelFill"></div></div>
+    </div>
+    <div class="lives-wrap">
+      <div class="lives-dots" id="livesDots">
+        <div class="life-dot"></div><div class="life-dot"></div><div class="life-dot"></div>
+      </div>
+      <div class="stat-label">Lives</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num coins" id="runCoins">0</div>
+      <div class="stat-label">Coins</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="distNum">0</div>
+      <div class="stat-label">Meters</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <canvas id="game"></canvas>
+    <div class="toast" id="toast"></div>
+    <button class="sound-btn" id="soundBtn" aria-label="Toggle sound">&#128266;</button>
+
+    <!-- START -->
+    <div class="overlay" id="startOverlay">
+      <div class="panel">
+        <h1>Fuel <span>Run</span></h1>
+        <div class="wallet">&#9679; <span id="startCoins">0</span></div>
+        <div class="streak-pill" id="streakPill"></div>
+        <p class="sub">Steer by dragging. Dodge traffic, mines and gunner cars. Grab fuel, guns, shields and coins.</p>
+        <button class="go" id="startBtn">Start driving</button>
+        <div class="btn-row">
+          <button class="alt" id="garageBtn">Garage</button>
+          <button class="alt" id="missionsBtn">Missions</button>
+        </div>
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--player)"></span>You</span>
+          <span><span class="swatch" style="background:var(--enemy)"></span>Traffic</span>
+          <span><span class="swatch" style="background:var(--gunner)"></span>Gunners</span>
+          <span><span class="swatch" style="background:var(--mine)"></span>Mines</span>
+          <span><span class="swatch" style="background:var(--fuel)"></span>Fuel</span>
+          <span><span class="swatch" style="background:var(--coin)"></span>Coins</span>
+          <span><span class="swatch" style="background:var(--gunpickup)"></span>Gun</span>
+          <span><span class="swatch" style="background:var(--shieldpickup)"></span>Shield</span>
+          <span><span class="swatch" style="background:var(--minefriendly-glow)"></span>Mine pack</span>
+        </div>
+        <div class="section">
+          <div class="section-title">Top runs</div>
+          <ol class="scores-list" id="startScoresList"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- GARAGE -->
+    <div class="overlay hidden" id="garageOverlay">
+      <div class="panel">
+        <h2>Garage</h2>
+        <div class="wallet">&#9679; <span id="garageCoins">0</span></div>
+        <div class="section-title">Cars</div>
+        <div class="car-list" id="carList"></div>
+        <div class="section">
+          <div class="section-title">Permanent upgrades</div>
+          <div id="upgradeList"></div>
+        </div>
+        <div class="btn-row"><button class="alt" id="garageBackBtn">Back</button></div>
+        <button class="reset-link" id="resetBtn">Reset all progress</button>
+      </div>
+    </div>
+
+    <!-- MISSIONS -->
+    <div class="overlay hidden" id="missionsOverlay">
+      <div class="panel">
+        <h2>Daily missions</h2>
+        <div class="wallet">&#9679; <span id="missionCoins">0</span></div>
+        <div class="streak-pill" id="missionStreak"></div>
+        <div id="missionList"></div>
+        <div class="btn-row"><button class="alt" id="missionsBackBtn">Back</button></div>
+      </div>
+    </div>
+
+    <!-- END -->
+    <div class="overlay hidden" id="endOverlay">
+      <div class="panel">
+        <div class="reason" id="reasonText">Crashed</div>
+        <h2 id="endTitle">Run over</h2>
+        <div class="score-row">
+          <div class="score-box"><div class="n" id="finalDist">0</div><div class="l">Meters</div></div>
+          <div class="score-box"><div class="n" id="finalKills">0</div><div class="l">Wrecks</div></div>
+          <div class="score-box"><div class="n" id="bestDist">0</div><div class="l">Best</div></div>
+        </div>
+        <div class="earn-list" id="earnList"></div>
+        <button class="revive" id="reviveBtn">Continue &#9679; 150</button>
+        <button class="go" id="retryBtn">Drive again</button>
+        <div class="btn-row">
+          <button class="alt" id="shareBtn">Share score</button>
+          <button class="alt" id="homeBtn">Home</button>
+        </div>
+        <div class="section">
+          <div class="section-title">Top runs</div>
+          <ol class="scores-list" id="endScoresList"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  // ================= DOM =================
+  const $ = id => document.getElementById(id);
+  const canvas = $('game'), ctx = canvas.getContext('2d');
+  const fuelFill = $('fuelFill'), distNum = $('distNum'), runCoinsEl = $('runCoins');
+  const livesDots = document.querySelectorAll('#livesDots .life-dot');
+  const toast = $('toast'), soundBtn = $('soundBtn');
+  const startOverlay = $('startOverlay'), garageOverlay = $('garageOverlay'),
+        missionsOverlay = $('missionsOverlay'), endOverlay = $('endOverlay');
+  const startBtn = $('startBtn'), garageBtn = $('garageBtn'), missionsBtn = $('missionsBtn');
+  const garageBackBtn = $('garageBackBtn'), missionsBackBtn = $('missionsBackBtn');
+  const retryBtn = $('retryBtn'), reviveBtn = $('reviveBtn'), shareBtn = $('shareBtn'), homeBtn = $('homeBtn');
+  const resetBtn = $('resetBtn');
+  const startCoins = $('startCoins'), garageCoins = $('garageCoins'), missionCoins = $('missionCoins');
+  const streakPill = $('streakPill'), missionStreak = $('missionStreak');
+  const carList = $('carList'), upgradeList = $('upgradeList'), missionList = $('missionList');
+  const startScoresList = $('startScoresList'), endScoresList = $('endScoresList');
+  const reasonText = $('reasonText'), endTitle = $('endTitle');
+  const finalDist = $('finalDist'), finalKills = $('finalKills'), bestDist = $('bestDist');
+  const earnList = $('earnList');
+
+  let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  let W = 0, H = 0;
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', ()=>{ resize(); layoutRoad(); });
+
+  let cssCache = {};
+  function getCss(v){
+    if(cssCache[v]) return cssCache[v];
+    const val = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    cssCache[v] = val; return val;
+  }
+
+  // ================= CONTENT: cars, upgrades, missions =================
+  const CARS = [
+    { id:'classic', name:'Runner',      price:0,    color:'#3fc7c1', dark:'#25938e',
+      tank:1.0,  grip:1.0,  desc:'Balanced starter. Nothing fancy, nothing broken.' },
+    { id:'courier', name:'Courier',     price:450,  color:'#7fd46a', dark:'#4b8f3d',
+      tank:1.3,  grip:0.9,  desc:'+30% fuel tank, slightly heavier steering.' },
+    { id:'inter',   name:'Interceptor', price:1200, color:'#ff9f4a', dark:'#c46a1d',
+      tank:0.85, grip:1.45, desc:'Razor-sharp steering, small tank. High risk.' },
+    { id:'hauler',  name:'Hauler',      price:2200, color:'#c76fd4', dark:'#8a3f96',
+      tank:1.15, grip:0.95, desc:'Starts every run with a shield already up.', startShield:true },
+    { id:'ghost',   name:'Ghost',       price:4000, color:'#e8e4f5', dark:'#9c96bf',
+      tank:1.1,  grip:1.2,  desc:'Built-in magnet and longer recovery after a hit.',
+      magnetBonus:70, invBonus:0.8 }
+  ];
+
+  const UPGRADES = [
+    { id:'tank',   name:'Fuel tank',   desc:'+9% tank capacity per level',      costs:[300,700,1400] },
+    { id:'grip',   name:'Grip',        desc:'+10% steering response per level', costs:[300,700,1400] },
+    { id:'armor',  name:'Armor',       desc:'+0.4s invincibility after a hit',  costs:[400,900,1700] },
+    { id:'magnet', name:'Magnet',      desc:'Pulls nearby pickups toward you',  costs:[500,1100,2000] }
+  ];
+  const MAX_LEVEL = 3;
+
+  const MISSION_POOL = [
+    { id:'dist',  scope:'run', target:900, reward:120, text:t=>'Travel '+t+'m in a single run' },
+    { id:'dist2', scope:'run', target:1500,reward:200, text:t=>'Travel '+t+'m in a single run' },
+    { id:'fuel',  scope:'day', target:30,  reward:100, text:t=>'Collect '+t+' fuel cans' },
+    { id:'kills', scope:'day', target:15,  reward:150, text:t=>'Wreck '+t+' enemy vehicles' },
+    { id:'time',  scope:'run', target:75,  reward:130, text:t=>'Survive '+t+'s in one run' },
+    { id:'near',  scope:'day', target:20,  reward:110, text:t=>'Pull off '+t+' near misses' },
+    { id:'coins', scope:'day', target:200, reward:90,  text:t=>'Collect '+t+' coins' },
+    { id:'nohit', scope:'run', target:1,   reward:220, text:()=>'Finish a run without losing a life' },
+    { id:'gunner',scope:'day', target:5,   reward:180, text:t=>'Destroy '+t+' gunner cars' }
+  ];
+
+  // ================= SAVE =================
+  const SAVE_KEY = 'fuel-run-save-v3';
+  const defaultSave = () => ({
+    coins:0, owned:['classic'], selected:'classic',
+    upgrades:{tank:0,grip:0,armor:0,magnet:0},
+    scores:[], missions:{date:'',list:[]},
+    streak:{count:0,last:''}, sound:true
+  });
+  let save = defaultSave();
+  let best = 0;
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function yesterdayStr(){
+    const d = new Date(Date.now()-86400000);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  // deterministic per-day shuffle so missions stay stable all day
+  function seededPick(dateStr, n){
+    let seed = 0;
+    for(let i=0;i<dateStr.length;i++) seed = (seed*31 + dateStr.charCodeAt(i)) >>> 0;
+    const pool = MISSION_POOL.slice();
+    const out = [];
+    while(out.length < n && pool.length){
+      seed = (seed*1103515245 + 12345) >>> 0;
+      out.push(pool.splice(seed % pool.length, 1)[0]);
+    }
+    return out;
+  }
+  function rollMissionsIfNeeded(){
+    const today = todayStr();
+    if(save.missions.date === today && save.missions.list.length) return;
+    save.missions = {
+      date: today,
+      list: seededPick(today, 3).map(m => ({
+        id:m.id, scope:m.scope, target:m.target, reward:m.reward,
+        desc:m.text(m.target), progress:0, done:false
+      }))
+    };
+  }
+  function bumpStreak(){
+    const today = todayStr();
+    if(save.streak.last === today) return 0;
+    save.streak.count = (save.streak.last === yesterdayStr()) ? save.streak.count+1 : 1;
+    save.streak.last = today;
+    const bonus = Math.min(save.streak.count, 7) * 30;
+    save.coins += bonus;
+    return bonus;
+  }
+
+  // Storage adapter: uses window.storage inside Claude artifacts,
+  // falls back to localStorage everywhere else (Capacitor, browser, file://).
+  const localStore = {
+    async get(key){
+      const v = localStorage.getItem(key);
+      if(v === null) throw new Error('missing');
+      return {key, value:v};
+    },
+    async set(key, value){ localStorage.setItem(key, value); return {key, value}; },
+    async delete(key){ localStorage.removeItem(key); return {key, deleted:true}; },
+    async list(prefix){
+      return {keys:Object.keys(localStorage).filter(k=>!prefix||k.startsWith(prefix))};
+    }
+  };
+  let store;
+  try{
+    store = (typeof window.storage !== 'undefined' && window.storage) ? window.storage : localStore;
+  }catch(e){ store = localStore; }
+
+  async function loadSave(){
+    try{
+      const r = await store.get(SAVE_KEY, false);
+      if(r && r.value) save = Object.assign(defaultSave(), JSON.parse(r.value));
+    }catch(e){ /* nothing saved yet, or storage unavailable */ }
+    if(!Array.isArray(save.scores)) save.scores = [];
+    best = save.scores.length ? save.scores[0] : 0;
+    rollMissionsIfNeeded();
+    soundOn = save.sound !== false;
+    updateSoundBtn();
+  }
+  let saveQueued = false;
+  async function persist(){
+    if(saveQueued) return;
+    saveQueued = true;
+    setTimeout(async ()=>{
+      saveQueued = false;
+      try{ await store.set(SAVE_KEY, JSON.stringify(save), false); }catch(e){}
+    }, 60);
+  }
+
+  const MAX_SCORES = 5;
+  function addScore(dist){
+    const val = Math.floor(dist);
+    save.scores.push(val);
+    save.scores.sort((a,b)=>b-a);
+    save.scores = save.scores.slice(0, MAX_SCORES);
+    best = save.scores[0];
+    return save.scores.indexOf(val);
+  }
+
+  // ================= AUDIO =================
+  let audioCtx = null, soundOn = true;
+  function initAudio(){
+    if(audioCtx) return;
+    try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+  function blip(freq, dur, type, vol, slideTo){
+    if(!soundOn || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type || 'square';
+    osc.frequency.setValueAtTime(freq, t);
+    if(slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(30,slideTo), t+dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol||0.09, t+0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t+dur+0.02);
+  }
+  function noiseBurst(dur, vol){
+    if(!soundOn || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const len = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<len;i++) data[i] = (Math.random()*2-1) * (1 - i/len);
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(vol||0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.setValueAtTime(1400, t);
+    src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    src.start(t);
+  }
+  const sfx = {
+    coin:    ()=>blip(940, 0.09, 'square', 0.05, 1500),
+    fuel:    ()=>blip(560, 0.13, 'triangle', 0.07, 880),
+    power:   ()=>{ blip(420,0.09,'square',0.06,700); setTimeout(()=>blip(700,0.12,'square',0.06,1050),70); },
+    shoot:   ()=>blip(760, 0.05, 'sawtooth', 0.028, 380),
+    explode: ()=>{ noiseBurst(0.3, 0.16); blip(160,0.22,'sawtooth',0.05,50); },
+    hit:     ()=>{ noiseBurst(0.4, 0.22); blip(110,0.3,'square',0.07,40); },
+    shield:  ()=>blip(300, 0.22, 'sine', 0.09, 90),
+    near:    ()=>blip(1300, 0.05, 'sine', 0.03, 1700),
+    over:    ()=>{ blip(400,0.2,'square',0.07,300); setTimeout(()=>blip(280,0.3,'square',0.07,120),160); }
+  };
+  function updateSoundBtn(){ soundBtn.innerHTML = soundOn ? '&#128266;' : '&#128263;'; }
+  soundBtn.addEventListener('click', ()=>{
+    soundOn = !soundOn; save.sound = soundOn; persist(); updateSoundBtn();
+    if(soundOn){ initAudio(); sfx.coin(); }
+  });
+
+  // ================= GAME CONSTANTS =================
+  const ROAD_MAX_W = 420, EDGE_STRIPE = 10, LANES = 3;
+  const CAR_W = 34, CAR_H = 56;
+  const TRUCK_W = 44, TRUCK_H = 74;
+  const GUNNER_W = 36, GUNNER_H = 58;
+  const CAN_W = 20, CAN_H = 28;
+  const COIN_SIZE = 17;
+  const MINE_SIZE = 26, MINE_FUEL_PENALTY = 15;
+  const PICKUP_SIZE = 22;
+  const BASE_SPEED = 190, MAX_SPEED = 620, SPEED_RAMP = 2.1;
+  const FUEL_BASE_MAX = 100, FUEL_DRAIN_BASE = 3.1, FUEL_DRAIN_SPEED = 1.6, FUEL_PICKUP = 26;
+  const LIVES_MAX = 3, INVINCIBLE_TIME = 1.6;
+  const SPEEDUP_AT = 60, SPEED_JUMP = 90, RAMP_BOOST_MULT = 2;
+  const GUN_DURATION = 9, PLAYER_SHOOT_INTERVAL = 0.32;
+  const PBULLET_SPEED = 520, EBULLET_SPEED = 340;
+  const GUNNER_FOLLOW_OFFSET = 78, GUNNER_FOLLOW_LERP = 2.2, GUNNER_STEER_RATE = 1.7;
+  const GUNNER_LIFETIME = 17, GUNNER_SHOOT_MIN = 1.5, GUNNER_SHOOT_MAX = 2.6;
+  const MINE_CHARGE_MAX = 3, MINE_DROP_INTERVAL = 2.3;
+  const REVIVE_COST = 150;
+  const NEAR_MISS_COIN = 2;
+
+  let state = 'start';
+  let roadX0, roadX1, roadW;
+  let player, entities, particles, distance, speed, fuel, fuelMax, lastT, dashOffset;
+  let spawnCarTimer, spawnFuelTimer, spawnMineTimer, spawnPowerupTimer, spawnGunnerTimer, spawnCoinTimer;
+  let lives, elapsed, speedBoosted, currentRamp, blinkPhase, hitFlash, toastTimer;
+  let shakeAmt, timeScale, slowmoTimer, usedRevive;
+  let stats, cfg;
+
+  function layoutRoad(){
+    roadW = Math.min(ROAD_MAX_W, W*0.82);
+    roadX0 = (W - roadW)/2;
+    roadX1 = roadX0 + roadW;
+  }
+  function laneX(i){ return roadX0 + (roadW/LANES)*(i+0.5); }
+  function currentCar(){ return CARS.find(c=>c.id===save.selected) || CARS[0]; }
+
+  function buildConfig(){
+    const car = currentCar(), u = save.upgrades;
+    return {
+      car,
+      fuelMax: FUEL_BASE_MAX * car.tank * (1 + 0.09*u.tank),
+      steer: 10 * car.grip * (1 + 0.10*u.grip),
+      invTime: INVINCIBLE_TIME + 0.4*u.armor + (car.invBonus||0),
+      magnet: (u.magnet ? 40 + 26*u.magnet : 0) + (car.magnetBonus||0),
+      startShield: !!car.startShield
+    };
+  }
+
+  function freshPlayer(){
+    return {
+      x:W/2, y:H-120, w:CAR_W, h:CAR_H, targetX:W/2,
+      invincible:false, invincibleTimer:0,
+      shield: cfg ? cfg.startShield : false,
+      gunTimer:0, shootTimer:0, mineCharges:0, dropTimer:0
+    };
+  }
+
+  function resetRun(){
+    layoutRoad();
+    cfg = buildConfig();
+    player = freshPlayer();
+    entities = []; particles = [];
+    distance = 0; speed = BASE_SPEED;
+    fuelMax = cfg.fuelMax; fuel = fuelMax;
+    spawnCarTimer=0.6; spawnFuelTimer=1.4; spawnMineTimer=4;
+    spawnPowerupTimer=6; spawnGunnerTimer=8; spawnCoinTimer=1.1;
+    dashOffset=0; lives=LIVES_MAX; elapsed=0;
+    speedBoosted=false; currentRamp=SPEED_RAMP;
+    blinkPhase=0; hitFlash=0; toastTimer=0;
+    shakeAmt=0; timeScale=1; slowmoTimer=0; usedRevive=false;
+    stats = { meters:0, cans:0, coins:0, kills:0, gunnerKills:0, near:0, seconds:0, hits:0 };
+    updateLivesUI(); runCoinsEl.textContent = '0';
+  }
+
+  function updateLivesUI(){
+    livesDots.forEach((d,i)=> d.classList.toggle('lost', i>=lives));
+  }
+  function showToast(msg, color){
+    toast.textContent = msg;
+    toast.style.color = color || getCss('--fuel');
+    toast.classList.add('show');
+    toastTimer = 1.5;
+  }
+
+  // ================= PARTICLES / JUICE =================
+  function addParticle(p){ particles.push(p); }
+  function burst(x, y, color, count, power){
+    for(let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2, s = (0.3+Math.random())*(power||140);
+      addParticle({kind:'spark', x, y, vx:Math.cos(a)*s, vy:Math.sin(a)*s,
+        life:0, max:0.35+Math.random()*0.35, size:2+Math.random()*2.5, color});
+    }
+  }
+  function explode(x, y, color){
+    burst(x, y, color || '#ffb347', 16, 190);
+    burst(x, y, '#ffe9a8', 8, 110);
+    addParticle({kind:'ring', x, y, life:0, max:0.4, size:8, color:'#ffd08a'});
+    for(let i=0;i<5;i++){
+      addParticle({kind:'smoke', x:x+(Math.random()*16-8), y:y+(Math.random()*16-8),
+        vx:(Math.random()*40-20), vy:-30-Math.random()*40,
+        life:0, max:0.7+Math.random()*0.4, size:7+Math.random()*7, color:'#5a5f70'});
+    }
+    shake(9);
+    sfx.explode();
+  }
+  function popText(x, y, text, color){
+    addParticle({kind:'text', x, y, vy:-46, life:0, max:0.85, text, color:color||'#fff'});
+  }
+  function shake(n){ shakeAmt = Math.min(18, shakeAmt + n); }
+  function slowmo(dur, scale){
+    slowmoTimer = Math.max(slowmoTimer, dur);
+    timeScale = Math.min(timeScale, scale);
+  }
+  function updateParticles(dt){
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life += dt;
+      if(p.life >= p.max){ particles.splice(i,1); continue; }
+      if(p.kind==='spark'){
+        p.x += p.vx*dt; p.y += p.vy*dt;
+        p.vx *= (1-2.4*dt); p.vy = p.vy*(1-2.4*dt) + 60*dt;
+      } else if(p.kind==='smoke'){
+        p.x += p.vx*dt; p.y += p.vy*dt; p.vy *= (1-1.6*dt);
+      } else if(p.kind==='text'){
+        p.y += p.vy*dt; p.vy *= (1-1.8*dt);
+      }
+    }
+  }
+  function drawParticles(){
+    for(const p of particles){
+      const k = 1 - p.life/p.max;
+      ctx.save();
+      if(p.kind==='spark'){
+        ctx.globalAlpha = k;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size*k, 0, Math.PI*2); ctx.fill();
+      } else if(p.kind==='smoke'){
+        ctx.globalAlpha = k*0.42;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size*(1.6-k), 0, Math.PI*2); ctx.fill();
+      } else if(p.kind==='ring'){
+        ctx.globalAlpha = k*0.85;
+        ctx.strokeStyle = p.color; ctx.lineWidth = 3*k+0.5;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size + (1-k)*46, 0, Math.PI*2); ctx.stroke();
+      } else if(p.kind==='text'){
+        ctx.globalAlpha = Math.min(1, k*1.6);
+        ctx.fillStyle = p.color;
+        ctx.font = '700 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.text, p.x, p.y);
+      }
+      ctx.restore();
+    }
+    ctx.textAlign = 'left';
+  }
+
+  // ================= SPAWNING =================
+  function spawnCar(){
+    const isTruck = Math.random() < 0.24;
+    const w = isTruck?TRUCK_W:CAR_W, h = isTruck?TRUCK_H:CAR_H;
+    let x = laneX(Math.floor(Math.random()*LANES)) + (Math.random()*24-12);
+    x = Math.max(roadX0+w/2+4, Math.min(roadX1-w/2-4, x));
+    entities.push({
+      type: isTruck?'truck':'car', x, y:-h, w, h,
+      speedMul: isTruck ? (0.62+Math.random()*0.12) : (0.85+Math.random()*0.35),
+      colors: isTruck ? {main:getCss('--truck'),dark:getCss('--truck-dark')}
+                      : {main:getCss('--enemy'),dark:getCss('--enemy-dark')}
+    });
+  }
+  function spawnFuel(){
+    let x = laneX(Math.floor(Math.random()*LANES)) + (Math.random()*20-10);
+    x = Math.max(roadX0+CAN_W/2+4, Math.min(roadX1-CAN_W/2-4, x));
+    entities.push({type:'fuel', x, y:-CAN_H, w:CAN_W, h:CAN_H});
+  }
+  function spawnCoins(){
+    const lane = Math.floor(Math.random()*LANES);
+    const n = 3 + Math.floor(Math.random()*3);
+    const baseX = Math.max(roadX0+COIN_SIZE/2+6, Math.min(roadX1-COIN_SIZE/2-6, laneX(lane)));
+    for(let i=0;i<n;i++){
+      entities.push({type:'coin', x:baseX, y:-COIN_SIZE - i*30, w:COIN_SIZE, h:COIN_SIZE});
+    }
+  }
+  function spawnMine(){
+    let x = laneX(Math.floor(Math.random()*LANES)) + (Math.random()*16-8);
+    x = Math.max(roadX0+MINE_SIZE/2+4, Math.min(roadX1-MINE_SIZE/2-4, x));
+    entities.push({type:'mine', friendly:false, x, y:-MINE_SIZE, w:MINE_SIZE, h:MINE_SIZE});
+  }
+  function spawnGunner(){
+    let x = roadX0 + roadW/2 + (Math.random()*roadW*0.5 - roadW*0.25);
+    x = Math.max(roadX0+GUNNER_W/2+4, Math.min(roadX1-GUNNER_W/2-4, x));
+    entities.push({type:'gunner', x, y:H+60, w:GUNNER_W, h:GUNNER_H,
+      shootTimer:1.2+Math.random()*0.8, life:GUNNER_LIFETIME});
+  }
+  function spawnPowerup(){
+    const kinds = ['gun','shield','minepack'];
+    const kind = kinds[Math.floor(Math.random()*kinds.length)];
+    let x = laneX(Math.floor(Math.random()*LANES)) + (Math.random()*16-8);
+    x = Math.max(roadX0+PICKUP_SIZE/2+4, Math.min(roadX1-PICKUP_SIZE/2-4, x));
+    entities.push({type:kind, x, y:-PICKUP_SIZE, w:PICKUP_SIZE, h:PICKUP_SIZE});
+  }
+
+  function rectsOverlap(a,b){
+    return Math.abs(a.x-b.x) < (a.w+b.w)/2*0.82 &&
+           Math.abs(a.y-b.y) < (a.h+b.h)/2*0.82;
+  }
+  const PICKUP_TYPES = ['fuel','coin','gun','shield','minepack'];
+  function isPickup(t){ return PICKUP_TYPES.indexOf(t) !== -1; }
+
+  // ================= INPUT =================
+  let dragging = false;
+  const pointerX = cx => cx - canvas.getBoundingClientRect().left;
+  canvas.addEventListener('touchstart', e=>{ dragging=true; player.targetX = pointerX(e.touches[0].clientX); }, {passive:true});
+  canvas.addEventListener('touchmove',  e=>{ if(dragging) player.targetX = pointerX(e.touches[0].clientX); }, {passive:true});
+  canvas.addEventListener('touchend',   ()=>{ dragging=false; }, {passive:true});
+  canvas.addEventListener('mousedown',  e=>{ dragging=true; player.targetX = pointerX(e.clientX); });
+  window.addEventListener('mousemove',  e=>{ if(dragging) player.targetX = pointerX(e.clientX); });
+  window.addEventListener('mouseup',    ()=>{ dragging=false; });
+  const keys = {};
+  window.addEventListener('keydown', e=>{
+    if(['ArrowLeft','ArrowRight','a','d','A','D'].includes(e.key)) e.preventDefault();
+    keys[e.key]=true;
+  });
+  window.addEventListener('keyup', e=>{ keys[e.key]=false; });
+
+  // ================= DRAWING =================
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  function drawRoad(){
+    ctx.fillStyle = getCss('--shoulder'); ctx.fillRect(-20,-20,W+40,H+40);
+    ctx.fillStyle = getCss('--asphalt-edge'); ctx.fillRect(roadX0-EDGE_STRIPE,-20,roadW+EDGE_STRIPE*2,H+40);
+    ctx.fillStyle = getCss('--asphalt'); ctx.fillRect(roadX0,-20,roadW,H+40);
+    ctx.fillStyle = getCss('--rumble');
+    const sh=26, gp=18;
+    let sy = -(dashOffset % (sh+gp));
+    while(sy < H){
+      ctx.fillRect(roadX0-EDGE_STRIPE, sy, 5, sh);
+      ctx.fillRect(roadX1+EDGE_STRIPE-5, sy, 5, sh);
+      sy += sh+gp;
+    }
+    ctx.strokeStyle = getCss('--lane-mark'); ctx.lineWidth = 3;
+    ctx.setLineDash([22,20]); ctx.lineDashOffset = -dashOffset;
+    for(let i=1;i<LANES;i++){
+      const lx = roadX0 + (roadW/LANES)*i;
+      ctx.beginPath(); ctx.moveTo(lx,-20); ctx.lineTo(lx,H+20); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  function drawCar(x,y,w,h,main,dark,up){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle='rgba(0,0,0,0.28)'; roundRect(-w/2+2,-h/2+4,w,h,7); ctx.fill();
+    ctx.fillStyle=main; roundRect(-w/2,-h/2,w,h,7); ctx.fill();
+    ctx.fillStyle=dark;
+    const wsH=h*0.28, wsY = up ? -h/2+h*0.16 : h/2-h*0.16-wsH;
+    roundRect(-w/2+5,wsY,w-10,wsH,4); ctx.fill();
+    const l1 = up?-h/2+3:h/2-6, l2 = up?h/2-6:-h/2+3;
+    ctx.fillStyle='#fff7d6'; ctx.fillRect(-w/2+3,l1,6,3); ctx.fillRect(w/2-9,l1,6,3);
+    ctx.fillStyle='#ff5f4d'; ctx.fillRect(-w/2+3,l2,6,3); ctx.fillRect(w/2-9,l2,6,3);
+    ctx.restore();
+  }
+  function drawGunner(x,y,w,h){
+    drawCar(x,y,w,h,getCss('--gunner'),getCss('--gunner-dark'),true);
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle=getCss('--gunner-dark'); roundRect(-4,-h/2-9,8,12,2); ctx.fill();
+    ctx.globalAlpha = 0.5+0.5*Math.abs(Math.sin(blinkPhase*5));
+    ctx.fillStyle=getCss('--ebullet');
+    ctx.beginPath(); ctx.arc(0,-h/2-9,2.4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function drawFuelCan(x,y,w,h){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle='rgba(0,0,0,0.25)'; roundRect(-w/2+1.5,-h/2+3,w,h,4); ctx.fill();
+    ctx.fillStyle=getCss('--fuel'); roundRect(-w/2,-h/2,w,h,4); ctx.fill();
+    ctx.fillStyle=getCss('--fuel-dark'); ctx.fillRect(-w/2+3,-h/2+4,w-6,5);
+    ctx.fillStyle='#3a2c0c'; ctx.fillRect(-3,-h/2-5,6,6);
+    ctx.restore();
+  }
+  function drawCoin(x,y,size){
+    ctx.save(); ctx.translate(x,y);
+    const squash = Math.abs(Math.cos(blinkPhase*3 + x*0.05));
+    ctx.fillStyle='rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(1,2.5,size/2*Math.max(0.2,squash),size/2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=getCss('--coin');
+    ctx.beginPath(); ctx.ellipse(0,0,size/2*Math.max(0.2,squash),size/2,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=getCss('--coin-dark'); ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.ellipse(0,0,size/2*Math.max(0.12,squash*0.6),size/2*0.6,0,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+  function drawMine(x,y,size,friendly){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(1.5,3,size/2,size/2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=getCss('--mine');
+    ctx.beginPath(); ctx.arc(0,0,size/2,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=getCss('--mine-rim'); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,size/2-2,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=getCss('--mine-rim');
+    for(let a=0;a<8;a++){
+      const ang=a*Math.PI/4, sx=Math.cos(ang)*(size/2-2), sy=Math.sin(ang)*(size/2-2);
+      ctx.beginPath(); ctx.arc(sx,sy,1.6,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 0.4+0.6*Math.abs(Math.sin(blinkPhase*4));
+    ctx.fillStyle = friendly?getCss('--minefriendly-glow'):getCss('--mine-glow');
+    ctx.beginPath(); ctx.arc(0,0,size*0.16,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function drawBullet(x,y,w,h,color){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle=color; roundRect(-w/2,-h/2,w,h,2.5); ctx.fill();
+    ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(0,0,w*1.4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function drawPickupGun(x,y,size){
+    ctx.save(); ctx.translate(x,y);
+    ctx.globalAlpha = 0.75+0.25*Math.sin(blinkPhase*5);
+    ctx.fillStyle=getCss('--gunpickup'); roundRect(-size/2,-size/2,size,size*0.62,5); ctx.fill();
+    ctx.fillStyle=getCss('--gunpickup-dark'); ctx.fillRect(size*0.14,-2,size*0.42,4);
+    ctx.restore();
+  }
+  function drawPickupShield(x,y,size){
+    ctx.save(); ctx.translate(x,y);
+    ctx.globalAlpha = 0.7+0.3*Math.sin(blinkPhase*5);
+    ctx.fillStyle=getCss('--shieldpickup');
+    const r=size/2; ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a=-Math.PI/2+i*Math.PI/3, px=Math.cos(a)*r, py=Math.sin(a)*r;
+      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=getCss('--shieldpickup-dark');
+    ctx.beginPath(); ctx.arc(0,0,r*0.4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function drawShieldRing(x,y,radius){
+    ctx.save(); ctx.translate(x,y);
+    ctx.strokeStyle=getCss('--shieldpickup');
+    ctx.globalAlpha = 0.55 + 0.35*Math.abs(Math.sin(blinkPhase*4));
+    ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(0,0,radius,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+  function drawStatusIcons(){
+    let iy=18; const ix=W-22;
+    ctx.font='600 11px -apple-system, sans-serif'; ctx.textBaseline='middle';
+    if(player.gunTimer>0){
+      drawPickupGun(ix,iy,16);
+      ctx.textAlign='right'; ctx.fillStyle=getCss('--cream');
+      ctx.fillText(Math.ceil(player.gunTimer)+'s', ix-14, iy);
+      iy+=26;
+    }
+    if(player.shield){
+      drawShieldRing(ix,iy,8);
+      ctx.fillStyle=getCss('--shieldpickup');
+      ctx.beginPath(); ctx.arc(ix,iy,4,0,Math.PI*2); ctx.fill();
+      iy+=26;
+    }
+    if(player.mineCharges>0){
+      drawMine(ix,iy,16,true);
+      ctx.textAlign='right'; ctx.fillStyle=getCss('--cream');
+      ctx.fillText('x'+player.mineCharges, ix-14, iy);
+      iy+=26;
+    }
+    ctx.textAlign='left';
+  }
+
+  // ================= UPDATE =================
+  function killEnemy(e, remove){
+    remove.add(e);
+    stats.kills++;
+    if(e.type==='gunner') stats.gunnerKills++;
+    explode(e.x, e.y, e.type==='gunner' ? '#c58bff' : '#ffb347');
+  }
+
+  function update(rawDt){
+    // slow-mo easing
+    if(slowmoTimer > 0){
+      slowmoTimer -= rawDt;
+      if(slowmoTimer <= 0) slowmoTimer = 0;
+    } else {
+      timeScale += (1 - timeScale) * Math.min(1, rawDt*6);
+    }
+    const dt = rawDt * timeScale;
+
+    elapsed += dt;
+    stats.seconds = elapsed;
+    blinkPhase += rawDt;
+    shakeAmt *= (1 - Math.min(1, rawDt*7));
+    if(hitFlash > 0) hitFlash = Math.max(0, hitFlash - rawDt*2);
+    if(toastTimer > 0){
+      toastTimer -= rawDt;
+      if(toastTimer <= 0) toast.classList.remove('show');
+    }
+
+    if(!speedBoosted && elapsed >= SPEEDUP_AT){
+      speed = Math.min(MAX_SPEED, speed + SPEED_JUMP);
+      currentRamp = SPEED_RAMP * RAMP_BOOST_MULT;
+      speedBoosted = true;
+      showToast('Speeding up!');
+      shake(6);
+    }
+    speed = Math.min(MAX_SPEED, speed + currentRamp*dt);
+    const speedFactor = (speed - BASE_SPEED)/(MAX_SPEED - BASE_SPEED);
+
+    if(player.invincible){
+      player.invincibleTimer -= dt;
+      if(player.invincibleTimer <= 0) player.invincible = false;
+    }
+
+    // steering
+    if(keys['ArrowLeft']||keys['a']||keys['A']) player.targetX -= 260*dt;
+    if(keys['ArrowRight']||keys['d']||keys['D']) player.targetX += 260*dt;
+    player.targetX = Math.max(roadX0+player.w/2+4, Math.min(roadX1-player.w/2-4, player.targetX));
+    player.x += (player.targetX - player.x) * Math.min(1, dt*cfg.steer);
+
+    // distance & fuel
+    distance += speed*dt/12;
+    stats.meters = distance;
+    fuel -= (FUEL_DRAIN_BASE + FUEL_DRAIN_SPEED*speedFactor)*dt;
+    if(fuel <= 0){ fuel = 0; endGame('fuel'); return; }
+    dashOffset = (dashOffset + speed*dt) % 1000;
+
+    // weapons
+    if(player.gunTimer > 0){
+      player.gunTimer = Math.max(0, player.gunTimer - dt);
+      player.shootTimer -= dt;
+      if(player.shootTimer <= 0 && player.gunTimer > 0){
+        entities.push({type:'pbullet', x:player.x, y:player.y-player.h/2-6, w:5, h:12, vy:-PBULLET_SPEED});
+        entities.push({type:'pbullet', x:player.x, y:player.y+player.h/2+6, w:5, h:12, vy:PBULLET_SPEED});
+        player.shootTimer = PLAYER_SHOOT_INTERVAL;
+        sfx.shoot();
+      }
+    }
+    if(player.mineCharges > 0){
+      player.dropTimer -= dt;
+      if(player.dropTimer <= 0){
+        entities.push({type:'mine', friendly:true, x:player.x, y:player.y, w:MINE_SIZE, h:MINE_SIZE});
+        player.mineCharges--;
+        player.dropTimer = MINE_DROP_INTERVAL;
+      }
+    }
+
+    // spawns
+    spawnCarTimer -= dt;
+    if(spawnCarTimer <= 0){ spawnCar(); spawnCarTimer = Math.max(0.55, 1.5-speedFactor*0.9)*(0.7+Math.random()*0.6); }
+    spawnFuelTimer -= dt;
+    if(spawnFuelTimer <= 0){ spawnFuel(); spawnFuelTimer = 2.6+Math.random()*2.4; }
+    spawnCoinTimer -= dt;
+    if(spawnCoinTimer <= 0){ spawnCoins(); spawnCoinTimer = 2.2+Math.random()*2.2; }
+    spawnMineTimer -= dt;
+    if(spawnMineTimer <= 0){ spawnMine(); spawnMineTimer = 4.5+Math.random()*3; }
+    spawnPowerupTimer -= dt;
+    if(spawnPowerupTimer <= 0){ spawnPowerup(); spawnPowerupTimer = 13+Math.random()*7; }
+    spawnGunnerTimer -= dt;
+    if(spawnGunnerTimer <= 0){
+      if(!entities.some(e=>e.type==='gunner')) spawnGunner();
+      spawnGunnerTimer = 12+Math.random()*8;
+    }
+
+    // ---- movement ----
+    const remove = new Set();
+    const spawned = [];
+    for(const e of entities){
+      if(e.type === 'gunner'){
+        const followY = player.y + GUNNER_FOLLOW_OFFSET;
+        e.y += (followY - e.y)*Math.min(1, dt*GUNNER_FOLLOW_LERP);
+        e.x += (player.x - e.x)*Math.min(1, dt*GUNNER_STEER_RATE);
+        e.x = Math.max(roadX0+e.w/2+4, Math.min(roadX1-e.w/2-4, e.x));
+        e.shootTimer -= dt; e.life -= dt;
+        if(e.shootTimer <= 0){
+          spawned.push({type:'ebullet', x:e.x, y:e.y-e.h/2-4, w:6, h:12, vy:-EBULLET_SPEED});
+          e.shootTimer = GUNNER_SHOOT_MIN + Math.random()*(GUNNER_SHOOT_MAX-GUNNER_SHOOT_MIN);
+          sfx.shoot();
+        }
+        if(e.life <= 0) remove.add(e);
+      } else if(e.type==='ebullet' || e.type==='pbullet'){
+        e.y += e.vy*dt;
+        if(e.y < -60 || e.y > H+60) remove.add(e);
+      } else {
+        const mul = isPickup(e.type) ? 0.9 : (e.type==='mine' ? 1 : e.speedMul);
+        e.y += speed*mul*dt;
+        // magnet
+        if(cfg.magnet > 0 && isPickup(e.type)){
+          const dx = player.x-e.x, dy = player.y-e.y;
+          const d = Math.hypot(dx,dy);
+          if(d < cfg.magnet && d > 1){
+            const pull = (1 - d/cfg.magnet) * 420 * dt;
+            e.x += dx/d*pull; e.y += dy/d*pull;
+          }
+        }
+        if(e.y - e.h/2 > H+40) remove.add(e);
+      }
+    }
+    if(spawned.length) entities.push(...spawned);
+
+    // ---- pickups ----
+    for(const e of entities){
+      if(remove.has(e) || !isPickup(e.type)) continue;
+      if(!rectsOverlap(player,e)) continue;
+      remove.add(e);
+      if(e.type==='fuel'){
+        fuel = Math.min(fuelMax, fuel+FUEL_PICKUP);
+        stats.cans++;
+        burst(e.x,e.y,getCss('--fuel'),8,120);
+        sfx.fuel();
+      } else if(e.type==='coin'){
+        stats.coins += 1;
+        runCoinsEl.textContent = stats.coins;
+        burst(e.x,e.y,getCss('--coin'),6,110);
+        sfx.coin();
+      } else if(e.type==='gun'){
+        player.gunTimer = GUN_DURATION;
+        burst(e.x,e.y,getCss('--gunpickup'),12,150);
+        showToast('Guns hot!', getCss('--gunpickup')); sfx.power();
+      } else if(e.type==='shield'){
+        player.shield = true;
+        burst(e.x,e.y,getCss('--shieldpickup'),12,150);
+        showToast('Shield up!', getCss('--shieldpickup')); sfx.power();
+      } else if(e.type==='minepack'){
+        player.mineCharges = Math.min(MINE_CHARGE_MAX, player.mineCharges+1);
+        player.dropTimer = Math.max(player.dropTimer, 1.0);
+        burst(e.x,e.y,getCss('--minefriendly-glow'),12,150);
+        showToast('Mine loaded', getCss('--minefriendly-glow')); sfx.power();
+      }
+    }
+
+    // ---- near misses ----
+    for(const e of entities){
+      if(remove.has(e) || e.nearDone) continue;
+      if(e.type!=='car' && e.type!=='truck' && e.type!=='gunner') continue;
+      const dx = Math.abs(e.x-player.x), dy = Math.abs(e.y-player.y);
+      const hitDx = (e.w+player.w)/2*0.82, hitDy = (e.h+player.h)/2*0.82;
+      if(dy < hitDy*0.9 && dx > hitDx && dx < hitDx+24){
+        e.nearDone = true;
+        stats.near++; stats.coins += NEAR_MISS_COIN;
+        runCoinsEl.textContent = stats.coins;
+        popText((e.x+player.x)/2, player.y-30, 'NEAR MISS +'+NEAR_MISS_COIN, getCss('--pbullet'));
+        slowmo(0.1, 0.72);
+        sfx.near();
+      }
+    }
+
+    // ---- hazards vs player ----
+    for(const e of entities){
+      if(remove.has(e)) continue;
+      const hazard = e.type==='car'||e.type==='truck'||e.type==='gunner'||
+                     e.type==='ebullet'||(e.type==='mine' && !e.friendly);
+      if(!hazard || player.invincible || !rectsOverlap(player,e)) continue;
+      remove.add(e);
+      if(player.shield){
+        player.shield = false;
+        player.invincible = true; player.invincibleTimer = 0.7;
+        hitFlash = 0.6; shake(8);
+        burst(player.x, player.y, getCss('--shieldpickup'), 18, 200);
+        showToast('Shield broke!', getCss('--shieldpickup'));
+        sfx.shield();
+      } else {
+        lives--; stats.hits++;
+        updateLivesUI();
+        if(e.type==='mine') fuel = Math.max(5, fuel-MINE_FUEL_PENALTY);
+        explode(player.x, player.y, '#ff8a6b');
+        shake(15); hitFlash = 1; sfx.hit();
+        if(lives <= 0){ endGame('crash'); return; }
+        slowmo(0.25, 0.45);
+        player.invincible = true; player.invincibleTimer = cfg.invTime;
+      }
+    }
+
+    // ---- player bullets vs enemies ----
+    for(const b of entities){
+      if(b.type!=='pbullet' || remove.has(b)) continue;
+      for(const e of entities){
+        if(e===b || remove.has(e)) continue;
+        if((e.type==='car'||e.type==='truck'||e.type==='gunner') && rectsOverlap(b,e)){
+          remove.add(b); killEnemy(e, remove);
+          break;
+        }
+      }
+    }
+    // ---- friendly mines vs enemies ----
+    for(const m of entities){
+      if(m.type!=='mine' || !m.friendly || remove.has(m)) continue;
+      for(const e of entities){
+        if(e===m || remove.has(e)) continue;
+        if((e.type==='car'||e.type==='truck'||e.type==='gunner') && rectsOverlap(m,e)){
+          remove.add(m); killEnemy(e, remove);
+          break;
+        }
+      }
+    }
+
+    if(remove.size) entities = entities.filter(e=>!remove.has(e));
+
+    updateParticles(rawDt);
+
+    fuelFill.style.width = (fuel/fuelMax*100)+'%';
+    fuelFill.style.background = fuel < fuelMax*0.24
+      ? 'linear-gradient(90deg,#8c2f22,#e8604c)'
+      : 'linear-gradient(90deg,var(--fuel-dark),var(--fuel))';
+    distNum.textContent = Math.floor(distance);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    if(shakeAmt > 0.3){
+      ctx.translate((Math.random()*2-1)*shakeAmt, (Math.random()*2-1)*shakeAmt);
+    }
+    drawRoad();
+    for(const e of entities){
+      if(e.type==='fuel') drawFuelCan(e.x,e.y,e.w,e.h);
+      else if(e.type==='coin') drawCoin(e.x,e.y,e.w);
+      else if(e.type==='mine') drawMine(e.x,e.y,e.w,e.friendly);
+      else if(e.type==='gun') drawPickupGun(e.x,e.y,e.w);
+      else if(e.type==='shield') drawPickupShield(e.x,e.y,e.w);
+      else if(e.type==='minepack') drawMine(e.x,e.y,e.w,true);
+      else if(e.type==='gunner') drawGunner(e.x,e.y,e.w,e.h);
+      else if(e.type==='ebullet') drawBullet(e.x,e.y,e.w,e.h,getCss('--ebullet'));
+      else if(e.type==='pbullet') drawBullet(e.x,e.y,e.w,e.h,getCss('--pbullet'));
+      else drawCar(e.x,e.y,e.w,e.h,e.colors.main,e.colors.dark,false);
+    }
+    if(player.shield) drawShieldRing(player.x, player.y, Math.max(player.w,player.h)/2+6);
+    const car = cfg ? cfg.car : CARS[0];
+    if(player.invincible && Math.floor(blinkPhase*8)%2===0){
+      ctx.save(); ctx.globalAlpha=0.35;
+      drawCar(player.x,player.y,player.w,player.h,car.color,car.dark,true);
+      ctx.restore();
+    } else {
+      drawCar(player.x,player.y,player.w,player.h,car.color,car.dark,true);
+    }
+    drawParticles();
+    ctx.restore();
+
+    if(hitFlash > 0){
+      ctx.fillStyle = 'rgba(232,96,76,'+(hitFlash*0.32)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+    drawStatusIcons();
+  }
+
+  function loop(t){
+    if(!lastT) lastT = t;
+    let dt = (t-lastT)/1000; lastT = t;
+    dt = Math.min(dt, 0.05);
+    if(state === 'playing'){ update(dt); draw(); }
+    requestAnimationFrame(loop);
+  }
+
+  // ================= MISSIONS / ECONOMY =================
+  function statForMission(id){
+    switch(id){
+      case 'dist': case 'dist2': return Math.floor(stats.meters);
+      case 'fuel':   return stats.cans;
+      case 'kills':  return stats.kills;
+      case 'time':   return Math.floor(stats.seconds);
+      case 'near':   return stats.near;
+      case 'coins':  return stats.coins;
+      case 'nohit':  return stats.hits === 0 ? 1 : 0;
+      case 'gunner': return stats.gunnerKills;
+      default: return 0;
+    }
+  }
+  function applyMissions(){
+    const completed = [];
+    for(const m of save.missions.list){
+      if(m.done) continue;
+      const v = statForMission(m.id);
+      m.progress = (m.scope === 'run') ? Math.max(m.progress, v) : m.progress + v;
+      if(m.progress >= m.target){
+        m.done = true;
+        save.coins += m.reward;
+        completed.push(m);
+      }
+    }
+    return completed;
+  }
+
+  function renderScoresList(el, newIndex){
+    el.innerHTML = '';
+    if(!save.scores.length){
+      const li = document.createElement('li');
+      li.className = 'empty'; li.textContent = 'No runs yet — be the first.';
+      el.appendChild(li); return;
+    }
+    save.scores.forEach((s,i)=>{
+      const li = document.createElement('li');
+      if(i === newIndex) li.className = 'new';
+      li.innerHTML = '<span class="rank">'+(i+1)+'</span><span class="val">'+s+' m</span>';
+      el.appendChild(li);
+    });
+  }
+  function refreshWallets(){
+    startCoins.textContent = save.coins;
+    garageCoins.textContent = save.coins;
+    missionCoins.textContent = save.coins;
+    reviveBtn.disabled = usedRevive || save.coins < REVIVE_COST;
+    reviveBtn.innerHTML = usedRevive ? 'Continue used' : ('Continue &#9679; '+REVIVE_COST);
+  }
+  function refreshStreak(){
+    const s = save.streak.count || 0;
+    const txt = s > 0 ? ('Day streak: <b>'+s+'</b> — play daily for bigger bonuses') : 'Play daily to build a streak bonus';
+    streakPill.innerHTML = txt;
+    missionStreak.innerHTML = txt;
+  }
+
+  // ================= GARAGE UI =================
+  function renderGarage(){
+    carList.innerHTML = '';
+    CARS.forEach(car=>{
+      const owned = save.owned.includes(car.id);
+      const sel = save.selected === car.id;
+      const div = document.createElement('div');
+      div.className = 'car-card' + (sel?' selected':'') + (owned?'':' locked');
+      const affordable = save.coins >= car.price;
+      const action = owned
+        ? (sel ? '<span class="car-action owned">Driving</span>' : '<span class="car-action">Select</span>')
+        : '<span class="car-action '+(affordable?'price':'cant')+'">&#9679; '+car.price+'</span>';
+      div.innerHTML =
+        '<span class="car-chip" style="background:'+car.color+'"></span>' +
+        '<span class="car-info"><span class="car-name">'+car.name+'</span>' +
+        '<span class="car-desc">'+car.desc+'</span></span>' + action;
+      div.addEventListener('click', ()=>{
+        if(owned){
+          save.selected = car.id; persist(); renderGarage(); sfx.coin();
+        } else if(save.coins >= car.price){
+          save.coins -= car.price;
+          save.owned.push(car.id);
+          save.selected = car.id;
+          persist(); refreshWallets(); renderGarage();
+          sfx.power(); showToast('Unlocked '+car.name+'!');
+        } else {
+          showToast('Need '+(car.price-save.coins)+' more coins', getCss('--danger'));
+        }
+      });
+      carList.appendChild(div);
+    });
+
+    upgradeList.innerHTML = '';
+    UPGRADES.forEach(u=>{
+      const lvl = save.upgrades[u.id] || 0;
+      const maxed = lvl >= MAX_LEVEL;
+      const cost = maxed ? 0 : u.costs[lvl];
+      const row = document.createElement('div');
+      row.className = 'upg-row';
+      let pips = '';
+      for(let i=0;i<MAX_LEVEL;i++) pips += '<span class="pip'+(i<lvl?' on':'')+'"></span>';
+      row.innerHTML =
+        '<span class="upg-info"><span class="upg-name">'+u.name+'</span>' +
+        '<span class="upg-desc">'+u.desc+'</span>' +
+        '<span class="pips">'+pips+'</span></span>' +
+        '<button class="upg-buy'+(maxed?' maxed':'')+'"'+((!maxed && save.coins<cost)?' disabled':'')+'>' +
+        (maxed ? 'MAX' : '&#9679; '+cost) + '</button>';
+      const btn = row.querySelector('button');
+      if(!maxed){
+        btn.addEventListener('click', ()=>{
+          if(save.coins < cost) return;
+          save.coins -= cost;
+          save.upgrades[u.id] = lvl+1;
+          persist(); refreshWallets(); renderGarage();
+          sfx.power(); showToast(u.name+' upgraded!');
+        });
+      }
+      upgradeList.appendChild(row);
+    });
+  }
+
+  // ================= MISSIONS UI =================
+  function renderMissions(){
+    rollMissionsIfNeeded();
+    missionList.innerHTML = '';
+    save.missions.list.forEach(m=>{
+      const pct = Math.min(100, Math.round(m.progress/m.target*100));
+      const div = document.createElement('div');
+      div.className = 'mission' + (m.done?' done':'');
+      div.innerHTML =
+        '<div class="mission-top"><span class="mission-desc">'+m.desc+'</span>' +
+        '<span class="mission-reward">'+(m.done?'&#10003; claimed':'&#9679; '+m.reward)+'</span></div>' +
+        '<div class="mission-bar"><i style="width:'+pct+'%"></i></div>' +
+        '<div class="mission-prog">'+Math.min(m.progress,m.target)+' / '+m.target+
+        (m.scope==='run'?' (single run)':' (today)')+'</div>';
+      missionList.appendChild(div);
+    });
+  }
+
+  // ================= END OF RUN =================
+  function endGame(reason){
+    state = 'over';
+    sfx.over();
+    explode(player.x, player.y, '#ff8a6b');
+
+    const rank = addScore(distance);
+    const distCoins = Math.floor(distance/10);
+    const completed = applyMissions();
+    const missionCoinsEarned = completed.reduce((a,m)=>a+m.reward, 0);
+    save.coins += stats.coins + distCoins;
+    persist();
+
+    reasonText.textContent = reason==='crash' ? 'Crashed' : 'Out of fuel';
+    endTitle.textContent = reason==='crash' ? 'Out of lives' : 'Ran dry';
+    finalDist.textContent = Math.floor(distance);
+    finalKills.textContent = stats.kills;
+    bestDist.textContent = Math.floor(best);
+
+    let rows =
+      '<div class="earn-row"><span>Coins collected</span><b>&#9679; '+stats.coins+'</b></div>' +
+      '<div class="earn-row"><span>Distance ('+Math.floor(distance)+'m)</span><b>&#9679; '+distCoins+'</b></div>';
+    if(completed.length){
+      rows += '<div class="earn-row"><span>Missions ('+completed.length+')</span><b>&#9679; '+missionCoinsEarned+'</b></div>';
+    }
+    rows += '<div class="earn-row total"><span>Total earned</span><b>&#9679; '+(stats.coins+distCoins+missionCoinsEarned)+'</b></div>';
+    earnList.innerHTML = rows;
+
+    renderScoresList(startScoresList, rank);
+    renderScoresList(endScoresList, rank);
+    refreshWallets();
+    if(completed.length) showToast('Mission complete! +'+missionCoinsEarned, getCss('--ok'));
+    endOverlay.classList.remove('hidden');
+  }
+
+  // Continue costs coins. To monetize, this is where a rewarded-ad callback
+  // would go instead: show ad -> on reward, call doRevive().
+  function doRevive(){
+    if(usedRevive || save.coins < REVIVE_COST) return;
+    save.coins -= REVIVE_COST;
+    usedRevive = true;
+    persist();
+    lives = 1;
+    fuel = Math.max(fuel, fuelMax*0.5);
+    player.invincible = true; player.invincibleTimer = 2.4;
+    player.shield = true;
+    // clear immediate threats around the player
+    entities = entities.filter(e => !(Math.abs(e.y-player.y) < 220 &&
+      (e.type==='car'||e.type==='truck'||e.type==='gunner'||e.type==='ebullet'||(e.type==='mine'&&!e.friendly))));
+    updateLivesUI(); refreshWallets();
+    endOverlay.classList.add('hidden');
+    state = 'playing'; lastT = 0;
+    showToast('Back in the race!', getCss('--ok'));
+    sfx.power();
+  }
+
+  function shareScore(){
+    const text = 'Fuel Run: '+Math.floor(distance)+'m, '+stats.kills+' wrecks, '+stats.near+' near misses. Beat that!';
+    if(navigator.share){
+      navigator.share({title:'Fuel Run', text}).catch(()=>{});
+    } else if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(
+        ()=>showToast('Score copied!', getCss('--ok')),
+        ()=>showToast('Could not copy')
+      );
+    } else {
+      showToast('Sharing not available here');
+    }
+  }
+
+  // ================= FLOW =================
+  function goHome(){
+    state = 'start';
+    endOverlay.classList.add('hidden');
+    garageOverlay.classList.add('hidden');
+    missionsOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
+    refreshWallets(); refreshStreak(); renderScoresList(startScoresList, -1);
+  }
+  function startGame(){
+    initAudio();
+    resize();
+    const bonus = bumpStreak();
+    rollMissionsIfNeeded();
+    persist();
+    resetRun();
+    refreshWallets(); refreshStreak();
+    state = 'playing'; lastT = 0;
+    startOverlay.classList.add('hidden');
+    endOverlay.classList.add('hidden');
+    if(bonus > 0) showToast('Daily streak bonus +'+bonus+' coins', getCss('--ok'));
+  }
+
+  startBtn.addEventListener('click', startGame);
+  retryBtn.addEventListener('click', startGame);
+  reviveBtn.addEventListener('click', doRevive);
+  shareBtn.addEventListener('click', shareScore);
+  homeBtn.addEventListener('click', goHome);
+  garageBtn.addEventListener('click', ()=>{
+    initAudio(); renderGarage(); refreshWallets();
+    startOverlay.classList.add('hidden');
+    garageOverlay.classList.remove('hidden');
+  });
+  garageBackBtn.addEventListener('click', ()=>{
+    garageOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
+  });
+  missionsBtn.addEventListener('click', ()=>{
+    initAudio(); renderMissions(); refreshWallets(); refreshStreak();
+    startOverlay.classList.add('hidden');
+    missionsOverlay.classList.remove('hidden');
+  });
+  missionsBackBtn.addEventListener('click', ()=>{
+    missionsOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
+  });
+  resetBtn.addEventListener('click', ()=>{
+    if(resetBtn.dataset.armed === '1'){
+      save = defaultSave();
+      best = 0;
+      rollMissionsIfNeeded();
+      persist();
+      resetBtn.dataset.armed = '0';
+      resetBtn.textContent = 'Reset all progress';
+      renderGarage(); refreshWallets(); refreshStreak(); renderScoresList(startScoresList,-1);
+      showToast('Progress reset');
+    } else {
+      resetBtn.dataset.armed = '1';
+      resetBtn.textContent = 'Tap again to confirm reset';
+      setTimeout(()=>{
+        resetBtn.dataset.armed = '0';
+        resetBtn.textContent = 'Reset all progress';
+      }, 4000);
+    }
+  });
+
+  // ================= BOOT =================
+  resize(); layoutRoad();
+  cfg = buildConfig();
+  player = freshPlayer();
+  entities = []; particles = []; blinkPhase = 0; shakeAmt = 0;
+  loadSave().then(()=>{
+    cfg = buildConfig();
+    player.shield = cfg.startShield;
+    refreshWallets(); refreshStreak();
+    renderScoresList(startScoresList, -1);
+  });
+  drawRoad();
+  requestAnimationFrame(loop);
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>

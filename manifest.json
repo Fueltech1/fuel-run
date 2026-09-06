@@ -1,0 +1,16 @@
+{
+  "name": "Fuel Run",
+  "short_name": "Fuel Run",
+  "description": "Dodge traffic, mines and gunner cars. Grab fuel, guns, shields and coins in this fast arcade driving game.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#151833",
+  "theme_color": "#151833",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
